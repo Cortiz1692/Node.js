@@ -1,70 +1,80 @@
-const fs = require('fs');
+const Cart = require('../models/cart');
 
-const cartsFilePath = 'carrito.json';
+// Controlador para crear un nuevo carrito
+exports.createCart = async (req, res) => {
+  try {
+    const cart = new Cart(); // Creamos una instancia de la clase Cart
+    const newCart = await cart.save(); // Guardamos el nuevo carrito
+    res.status(201).json(newCart); // Enviamos la respuesta con el nuevo carrito y estado 201 (creado)
+  } catch (error) {
+    console.error(error);
+    res.status(500).send(); // Enviamos una respuesta de error en caso de haber excepción
+  }
+};
 
-function createCart(callback) {
-  const newCart = { id: generateCartId(), products: [] };
-  fs.writeFile(cartsFilePath, JSON.stringify(newCart), 'utf8', err => {
-    if (err) {
-      console.error(err);
-      callback('Error interno del servidor', null);
-    } else {
-      callback(null, newCart);
+// Controlador para obtener un carrito por su ID
+exports.getCartById = async (req, res) => {
+  try {
+    const { id } = req.params; // Obtenemos el ID del carrito desde los parámetros de la ruta
+    const cart = await Cart.getById(id); // Obtenemos el carrito por su ID usando el método getById de la clase Cart
+    if (!cart) { // Si no se encontró el carrito
+      return res.status(404).json({ error: 'Carrito no encontrado' }); // Enviamos una respuesta de error 404 (no encontrado)
     }
-  });
-}
+    res.json(cart.products); // Si se encontró el carrito, enviamos su lista de productos como respuesta
+  } catch (error) {
+    console.error(error);
+    res.status(500).send(); // Enviamos una respuesta de error en caso de haber excepción
+  }
+};
 
-function getCartById(cartId, callback) {
-  fs.readFile(cartsFilePath, 'utf8', (err, data) => {
-    if (err) {
-      console.error(err);
-      callback('Error interno del servidor', null);
-    } else {
-      const cart = JSON.parse(data);
-      if (cart.id === cartId) {
-        callback(null, cart.products);
-      } else {
-        callback('Carrito no encontrado', null);
-      }
+// Controlador para agregar un producto a un carrito por su ID
+exports.addProductToCart = async (req, res) => {
+  try {
+    const { id: cartId } = req.params; // Obtenemos el ID del carrito desde los parámetros de la ruta, y lo asignamos a la variable cartId
+    const { productId, quantity = 1 } = req.body; // Obtenemos el ID y cantidad de productos desde el cuerpo de la petición
+
+    if (!productId) { // Validamos que se haya provisto un ID de producto
+      return res.status(400).json({ error: 'ID de producto es obligatorio' }); // Enviamos una respuesta de error 400 (solicitud incorrecta)
     }
-  });
-}
 
-function addProductToCart(cartId, productId, callback) {
-  fs.readFile(cartsFilePath, 'utf8', (err, data) => {
-    if (err) {
-      console.error(err);
-      callback('Error interno del servidor', null);
-    } else {
-      const cart = JSON.parse(data);
-      if (cart.id === cartId) {
-        const productIndex = cart.products.findIndex(p => p.product === productId);
-        if (productIndex !== -1) {
-          cart.products[productIndex].quantity++;
-        } else {
-          cart.products.push({ product: productId, quantity: 1 });
-        }
-        fs.writeFile(cartsFilePath, JSON.stringify(cart), 'utf8', err => {
-          if (err) {
-            console.error(err);
-            callback('Error interno del servidor', null);
-          } else {
-            callback(null, cart.products);
-          }
-        });
-      } else {
-        callback('Carrito no encontrado', null);
-      }
+    const cart = await Cart.getById(cartId); // Obtenemos el carrito por su ID usando el método getById de la clase Cart
+    if (!cart) { // Si no se encontró el carrito
+      return res.status(404).json({ error: 'Carrito no encontrado' }); // Enviamos una respuesta de error 404 (no encontrado)
     }
-  });
-}
 
-function generateCartId() {
-  return Math.random().toString(36).substr(2, 9);
-}
+    const product = await Product.getById(productId); // Obtenemos el producto por su ID usando el método getById de la clase Product
+    if (!product) { // Si no se encontró el producto
+      return res.status(404).json({ error: 'Producto no encontrado' }); // Enviamos una respuesta de error 404 (no encontrado)
+    }
 
-module.exports = {
-  createCart,
-  getCartById,
-  addProductToCart
+    cart.addProduct(product, quantity); // Agregamos el producto al carrito
+    await cart.save(); // Guardamos el carrito actualizado en el archivo de carritos
+    res.status(204).send(); // Enviamos una respuesta vacía con estado 204 (ningún contenido)
+  } catch (error) {
+    console.error(error);
+    res.status(500).send(); // Enviamos una respuesta de error en caso de haber excepción
+  }
+};
+
+// Controlador para eliminar un producto de un carrito por su ID
+exports.removeProductFromCart = async (req, res) => {
+  try {
+    const { id: cartId, productId } = req.params; // Obtenemos el ID del carrito y el ID del producto desde los parámetros de la ruta
+
+    const cart = await Cart.getById(cartId); // Obtenemos el carrito por su ID usando el método getById de la clase Cart
+    if (!cart) { // Si no se encontró el carrito
+      return res.status(404).json({ error: 'Carrito no encontrado' }); // Enviamos una respuesta de error 404 (no encontrado)
+    }
+
+    if (!cart.removeProduct(productId)) { // Si el producto no se encontró en el carrito
+      return res.status(404).json({ error: 'Producto no encontrado en este carrito' }); // Enviamos una respuesta de error 404 (no encontrado)
+    }
+
+    // Si se encontró y eliminó el producto del carrito, guardamos el carrito actualizado en el archivo de carritos
+    await cart.save();
+    res.status(204).send(); // Enviamos una respuesta vacía con estado 204 (ningún contenido)
+  } catch (error) {
+    console.error(error);
+    res.status(500).send(); // Enviamos una respuesta de error en caso de haber excepción
+  }
 };

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Lista de productos</title>
+</head>
+<body>
+  <h1>Lista de productos</h1>
+  <ul>
+    {{#each productos}}
+      <li>{{this}}</li>
+    {{/each}}
+  </ul>
+
+    <script src="/socket.io/socket.io.js"></script>
+  <script src="/socket-client.js" type="text/javascript"></script> <!-- Integrar el archivo socket-client.js -->
+</body>
+</html>

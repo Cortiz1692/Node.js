@@ -1,121 +1,101 @@
-const fs = require('fs');
+const Product = require('../models/product');
 
-const productsFilePath = 'productos.json';
-
-
-function getProducts() {
+// Controlador para obtener todos los productos
+exports.getProducts = async (req, res) => {
   try {
-    const data = fs.readFileSync(productsFilePath, 'utf8');
-    return JSON.parse(data);
+    const products = await Product.getAll(); // Obtenemos todos los productos usando el método getAll de la clase Product
+    res.json(products); // Enviamos la lista de productos como respuesta
   } catch (error) {
-    return [];
+    console.error(error);
+    res.status(500).send(); // Enviamos una respuesta de error en caso de haber excepción
   }
-}
+};
 
-
-function getProductById(id) {
-  const products = this.getProducts();
-    const product = products.find(product => String(product.id) === String(id));
-  
-    if (!product) {
-      throw new Error('Producto no encontrado');
+// Controlador para obtener un producto por su ID
+exports.getProductById = async (req, res) => {
+  try {
+    const { id } = req.params; // Obtenemos el ID del producto desde los parámetros de la ruta
+    const product = await Product.getById(id); // Obtenemos el producto por su ID usando el método getById de la clase Product
+    if (!product) { // Si no se encontró el producto
+      return res.status(404).json({ error: 'Producto no encontrado' }); // Enviamos una respuesta de error 404 (no encontrado)
     }
-  
-    return product;
+    res.json(product); // Si se encontró el producto, lo enviamos como respuesta
+  } catch (error) {
+    console.error(error);
+    res.status(500).send(); // Enviamos una respuesta de error en caso de haber excepción
   }
+};
 
-function addProduct(newProduct, callback) {
-  const { title, description, code, price, status, stock, category } = newProduct;
-
-  // Verificar que los campos obligatorios estén presentes
-  if (!title || !description || !code || !price || !status || !stock || !category) {
-    callback('Todos los campos obligatorios deben estar presentes', null);
-    return;
+// Controlador para crear un nuevo producto
+exports.createProduct = async (req, res) => {
+  try {
+    const { title, description, price } = req.body; // Obtenemos el título, descripción y precio del producto desde el cuerpo de la petición
+    if (!title || !description || !price) { // Validamos que se hayan provisto todos los campos obligatorios
+      return res.status(400).json({ error: 'Faltan campos obligatorios' }); // Enviamos una respuesta de error 400 (solicitud incorrecta)
+    }
+    const product = new Product(title, description, price); // Creamos una nueva instancia de la clase Product con los datos del nuevo producto
+    const newProduct = await product.save(); // Guardamos el nuevo producto
+    res.status(201).json(newProduct); // Enviamos el nuevo producto como respuesta y estado 201 (creado)
+  } catch (error) {
+    console.error(error);
+    res.status(500).send(); // Enviamos una respuesta de error en caso de haber excepción
   }
+};
 
-  fs.readFile(productsFilePath, 'utf8', (err, data) => {
-    if (err) {
-      console.error(err);
-      callback('Error interno del servidor', null);
-    } else {
-      const products = JSON.parse(data);
-      const productId = generateProductId();
-      newProduct.id = productId;
-      products.push(newProduct);
-      fs.writeFile(productsFilePath, JSON.stringify(products), 'utf8', err => {
-        if (err) {
-          console.error(err);
-          callback('Error interno del servidor', null);
-        } else {
-          callback(null, newProduct);
-        }
-      });
+// Controlador para actualizar un producto por su ID
+exports.updateProduct = async (req, res) => {
+  try {
+    const { id } = req.params; // Obtenemos el ID del producto desde los parámetros de la ruta
+    const { title, description, price } = req.body; // Obtenemos los datos del producto a actualizar desde el cuerpo de la petición
+
+    if (!title && !description && !price) { // Validamos que se haya provisto al menos un campo para actualizar
+      return res.status(400).json({ error: 'Debe ingresar al menos un campo para actualizar' }); // Enviamos una respuesta de error 400 (solicitud incorrecta)
     }
-  });
-}
 
-
-function updateProduct(productId, updatedProduct, callback) {
-  fs.readFile(productsFilePath, 'utf8', (err, data) => {
-    if (err) {
-      console.error(err);
-      callback('Error interno del servidor', null);
-    } else {
-      const products = JSON.parse(data);
-      const productIndex = products.findIndex(p => p.id === productId);
-      if (productIndex !== -1) {
-        const productToUpdate = products[productIndex];
-        const updatedProductWithId = { ...updatedProduct, id: productId };
-        products[productIndex] = { ...productToUpdate, ...updatedProductWithId };
-        fs.writeFile(productsFilePath, JSON.stringify(products), 'utf8', err => {
-          if (err) {
-            console.error(err);
-            callback('Error interno del servidor', null);
-          } else {
-            callback(null, updatedProductWithId);
-          }
-        });
-      } else {
-        callback('Producto no encontrado', null);
-      }
+    const product = await Product.getById(id); // Obtenemos el producto por su ID usando el método getById de la clase Product
+    if (!product) { // Si no se encontró el producto
+      return res.status(404).json({ error: 'Producto no encontrado' }); // Enviamos una respuesta de error 404 (no encontrado)
     }
-  });
-}
 
-
-function deleteProduct(productId, callback) {
-  fs.readFile(productsFilePath, 'utf8', (err, data) => {
-    if (err) {
-      console.error(err);
-      callback('Error interno del servidor');
-    } else {
-      let products = JSON.parse(data);
-      const prevLength = products.length;
-      products = products.filter(p => p.id !== productId);
-      if (products.length !== prevLength) {
-        fs.writeFile(productsFilePath, JSON.stringify(products), 'utf8', err => {
-          if (err) {
-            console.error(err);
-            callback('Error interno del servidor');
-          } else {
-            callback(null);
-          }
-        });
-      } else {
-        callback('Producto no encontrado');
-      }
+    // Si se proporcionó un nuevo valor para el título, lo actualizamos en el producto
+    if (title) {
+      product.title = title;
     }
-  });
-}
 
-function generateProductId() {
-  return Math.random().toString(36).substr(2, 9);
-}
+    // Si se proporcionó una nueva descripción, la actualizamos en el producto
+    if (description) {
+      product.description = description;
+    }
 
-module.exports = {
-  getProducts,
-  getProductById,
-  addProduct,
-  updateProduct,
-  deleteProduct
+    // Si se proporcionó un nuevo precio, lo actualizamos en el producto
+    if (price) {
+      product.price = price;
+    }
+
+    const updatedProduct = await product.save(); // Guardamos el producto actualizado
+    res.status(200).json(updatedProduct); // Enviamos el producto actualizado como respuesta y estado 200 (éxito)
+  } catch (error) {
+    console.error(error);
+    res.status(500).send(); // Enviamos una respuesta de error en caso de haber excepción
+  }
+};
+
+// Controlador para eliminar un producto por su ID
+exports.deleteProduct = async (req, res) => {
+  try {
+    const { id } = req.params; // Obtenemos el ID del producto desde los parámetros de la ruta
+    const product = await Product.getById(id); // Obtenemos el producto por su ID usando el método getById de la clase Product
+    if (!product) { // Si no se encontró el producto
+      return res.status(404).json({ error: 'Producto no encontrado' }); // Enviamos una respuesta de error 404 (no encontrado)
+    }
+    const result = await Product.deleteById(id); // Eliminamos el producto por su ID usando el método deleteById de la clase Product
+    if (result) { // Si se eliminó el producto correctamente
+      res.status(204).send(); // Enviamos una respuesta vacía con estado 204 (ningún contenido)
+    } else { // Si no se pudo eliminar el producto
+      res.status(500).send(); // Enviamos una respuesta de error 500 (error interno del servidor)
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).send(); // Enviamos una respuesta de error en caso de haber excepción
+  }
 };
